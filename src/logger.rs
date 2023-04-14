@@ -36,7 +36,7 @@ impl LogReceiver {
 	pub fn current(&mut self) -> Option<Vec<u8>> {
 		if let Ok(new_logs) = self.receiver.try_recv() {
 			self.buffer.extend(new_logs);
-			self.buffer.truncate(usize::MAX);
+			self.buffer.truncate(usize::MAX / 2);
 		}
 
 		if self.buffer.is_empty() {

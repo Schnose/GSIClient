@@ -53,7 +53,7 @@ async fn main() -> Result<()> {
 
 		subscriber
 			.json()
-			.with_max_level(Level::DEBUG)
+			.with_max_level(Level::TRACE)
 			.with_writer(Arc::new(log_sender))
 			.init();
 
