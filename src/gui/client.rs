@@ -1,9 +1,14 @@
 use {
 	super::Tab,
-	crate::{colors, config::Config, logger::LogReceiver},
+	crate::{
+		colors,
+		config::Config,
+		logger::{Log, LogReceiver},
+	},
 	eframe::{
 		egui::{
-			style::Selection, FontData, FontDefinitions, RichText, Style, TextStyle, Ui, Visuals,
+			style::Selection, FontData, FontDefinitions, RichText, ScrollArea, Style, TextStyle,
+			Ui, Visuals,
 		},
 		epaint::{FontFamily, FontId},
 		CreationContext,
@@ -131,8 +136,51 @@ impl Client {
 		ui.label("THIS IS MAIN");
 	}
 
-	pub fn render_logs(&self, ui: &mut Ui) {
-		ui.label("THIS IS LOGS");
+	pub fn render_logs(&mut self, ui: &mut Ui) {
+		let Some(logger) = &mut self.logger else {
+			ui.vertical_centered(|ui| ui.colored_label(colors::RED, "Logs are displayed on STDOUT."));
+			return;
+		};
+
+		let Some(logs) = logger.current() else {
+			return;
+		};
+
+		let logs = Log::from_slice(&logs);
+
+		ScrollArea::new([true; 2])
+			.auto_shrink([false; 2])
+			.stick_to_bottom(true)
+			.show_rows(ui, 8.0, logs.len(), |ui, range| {
+				logs.into_iter()
+					.skip(range.start)
+					.take(range.len())
+					.for_each(|log| {
+						ui.horizontal(|ui| {
+							ui.add_space(4.0);
+
+							ui.label(log.timestamp);
+
+							ui.add_space(4.0);
+							ui.separator();
+							ui.add_space(4.0);
+
+							ui.label(log.level);
+
+							ui.add_space(4.0);
+							ui.separator();
+							ui.add_space(4.0);
+
+							ui.label(log.message);
+							ui.add_space(4.0);
+						});
+					});
+			});
+
+		ui.add_space(8.0);
+
+		// FIXME: this is not being displayed for some reason
+		ui.label("HI");
 	}
 
 	pub fn render_status(&self, ui: &mut Ui) {
