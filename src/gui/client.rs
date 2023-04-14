@@ -27,6 +27,7 @@ pub struct Client {
 	pub logger: Option<LogReceiver>,
 	pub current_tab: Tab,
 	pub state: Arc<Mutex<Option<crate::gsi::State>>>,
+	pub api_key_prompt: String,
 	pub gsi_handle: Option<schnose_gsi::ServerHandle>,
 	pub axum_handle: Option<JoinHandle<()>>,
 }
@@ -39,11 +40,17 @@ impl Client {
 
 	#[tracing::instrument]
 	pub async fn init(config: Config, logger: Option<LogReceiver>) {
+		let api_key_prompt = config
+			.schnose_api_key
+			.map(|uuid| uuid.to_string())
+			.unwrap_or_default();
+
 		let client = Self {
 			config: Arc::new(Mutex::new(config)),
 			logger,
 			current_tab: Tab::Main,
 			state: Arc::new(Mutex::new(None)),
+			api_key_prompt,
 			gsi_handle: None,
 			axum_handle: None,
 		};
@@ -187,16 +194,20 @@ impl Client {
 
 	fn render_key_prompt(&mut self, ui: &mut Ui) {
 		ui.label("Enter your API Key: ");
-		let config = &mut *tokio::task::block_in_place(|| self.config.blocking_lock());
-		if let Some(current_api_key) = config.schnose_api_key.as_mut() {
-			let mut new_api_key = String::new();
-			TextEdit::singleline(&mut new_api_key)
-				.password(true)
-				.show(ui);
 
-			if let Ok(uuid) = Uuid::parse_str(&new_api_key) {
-				*current_api_key = uuid;
-			}
+		let config = &mut *tokio::task::block_in_place(|| self.config.blocking_lock());
+
+		TextEdit::singleline(&mut self.api_key_prompt)
+			.password(true)
+			.show(ui);
+
+		if let Ok(new_key) = Uuid::parse_str(&self.api_key_prompt) {
+			match config.schnose_api_key.as_mut() {
+				None => config.schnose_api_key = Some(new_key),
+				Some(old_key) => *old_key = new_key,
+			};
+		} else if self.api_key_prompt.is_empty() {
+			config.schnose_api_key = None;
 		}
 	}
 

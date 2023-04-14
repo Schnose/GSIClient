@@ -49,7 +49,7 @@ impl Config {
 		config_dir.push("config.toml");
 
 		// Create default config file if there is no config file yet
-		if !config_dir.exists() {
+		if !&config_dir.exists() {
 			use std::io::Write;
 
 			let default_contents = r#"
@@ -87,8 +87,8 @@ where
 	D: Deserializer<'de>,
 	T: FromStr,
 {
-	Ok(Option::deserialize(deserializer)?
-		.filter(String::is_empty)
+	Ok(Option::<String>::deserialize(deserializer)?
+		.filter(|s| !s.is_empty())
 		.and_then(|s| s.parse().ok()))
 }
 
