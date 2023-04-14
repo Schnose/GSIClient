@@ -1,7 +1,13 @@
-use {crate::config::Config, eframe::egui::CentralPanel, std::fs::File, tracing::info};
+use {
+	crate::{colors, config::Config},
+	eframe::egui::{CentralPanel, RichText},
+	std::fs::File,
+	tracing::info,
+};
 
 mod client;
 pub use client::Client;
+use eframe::egui::TopBottomPanel;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
@@ -11,8 +17,40 @@ pub enum Tab {
 
 impl eframe::App for Client {
 	fn update(&mut self, ctx: &eframe::egui::Context, _: &mut eframe::Frame) {
+		TopBottomPanel::top("header-panel").show(ctx, |ui| {
+			ui.add_space(8.0);
+
+			ui.horizontal(|ui| {
+				ui.selectable_value(&mut self.current_tab, Tab::Main, "Main");
+				ui.selectable_value(&mut self.current_tab, Tab::Logs, "Logs");
+			});
+
+			ui.add_space(8.0);
+			ui.separator();
+			ui.add_space(8.0);
+
+			let header = RichText::new("Schnose GSI Client")
+				.color(colors::POGGERS)
+				.heading();
+
+			ui.vertical_centered(|ui| ui.label(header));
+
+			ui.add_space(8.0);
+		});
+
 		CentralPanel::default().show(ctx, |ui| {
-			ui.label("HI");
+			match self.current_tab {
+				Tab::Main => self.render_main(ui),
+				Tab::Logs => self.render_logs(ui),
+			};
+		});
+
+		TopBottomPanel::bottom("footer-panel").show(ctx, |ui| {
+			ui.add_space(8.0);
+
+			ui.vertical_centered(|ui| self.render_status(ui));
+
+			ui.add_space(8.0);
 		});
 	}
 

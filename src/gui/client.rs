@@ -2,7 +2,9 @@ use {
 	super::Tab,
 	crate::{colors, config::Config, logger::LogReceiver},
 	eframe::{
-		egui::{style::Selection, FontData, FontDefinitions, Style, TextStyle, Visuals},
+		egui::{
+			style::Selection, FontData, FontDefinitions, RichText, Style, TextStyle, Ui, Visuals,
+		},
 		epaint::{FontFamily, FontId},
 		CreationContext,
 	},
@@ -123,5 +125,24 @@ impl Client {
 			slider_trailing_fill: true,
 			..Default::default()
 		});
+	}
+
+	pub fn render_main(&self, ui: &mut Ui) {
+		ui.label("THIS IS MAIN");
+	}
+
+	pub fn render_logs(&self, ui: &mut Ui) {
+		ui.label("THIS IS LOGS");
+	}
+
+	pub fn render_status(&self, ui: &mut Ui) {
+		let status = if self.gsi_handle.is_some() && self.axum_handle.is_some() {
+			RichText::new("Running").color(colors::GREEN)
+		} else {
+			RichText::new("Stopped").color(colors::RED)
+		}
+		.heading();
+
+		ui.label(status);
 	}
 }
