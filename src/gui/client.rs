@@ -233,15 +233,6 @@ impl Client {
 	}
 
 	pub fn render_logs(&mut self, ui: &mut Ui) {
-		if self.logger.is_some() {
-			// TODO: put this below the scroll area
-			self.save_logs(ui);
-
-			Self::spacing(ui);
-			ui.separator();
-			Self::spacing(ui);
-		}
-
 		let Some(logger) = &mut self.logger else {
 			ui.vertical_centered(|ui| ui.colored_label(colors::RED, "Logs are displayed on STDOUT."));
 			return;
@@ -256,6 +247,7 @@ impl Client {
 		ScrollArea::new([true; 2])
 			.auto_shrink([false; 2])
 			.stick_to_bottom(true)
+			.max_height(ui.available_height() - 120.0)
 			.show_rows(ui, 8.0, logs.len(), |ui, range| {
 				logs.into_iter()
 					.skip(range.start)
@@ -283,9 +275,11 @@ impl Client {
 			});
 
 		Self::spacing(ui);
+		ui.separator();
 
-		// FIXME: this is not being displayed for some reason
-		ui.label("HI");
+		self.save_logs(ui);
+
+		Self::spacing(ui);
 	}
 
 	pub fn render_status(&self, ui: &mut Ui) {
@@ -303,7 +297,7 @@ impl Client {
 		use std::io::Write;
 
 		if !ui
-			.button(RichText::new("Save logs").color(colors::PEACH))
+			.button(RichText::new("Save logs").color(colors::TEXT))
 			.clicked()
 		{
 			return;

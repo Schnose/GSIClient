@@ -25,9 +25,9 @@ impl eframe::App for Client {
 				ui.selectable_value(&mut self.current_tab, Tab::Logs, "Logs");
 			});
 
-			ui.add_space(8.0);
+			ui.add_space(Self::DEFAULT_SPACING);
 			ui.separator();
-			ui.add_space(8.0);
+			ui.add_space(Self::DEFAULT_SPACING);
 
 			let header = RichText::new("Schnose GSI Client")
 				.color(colors::POGGERS)
@@ -35,7 +35,7 @@ impl eframe::App for Client {
 
 			ui.vertical_centered(|ui| ui.label(header));
 
-			ui.add_space(8.0);
+			ui.add_space(Self::DEFAULT_SPACING);
 		});
 
 		CentralPanel::default().show(ctx, |ui| {
@@ -46,11 +46,11 @@ impl eframe::App for Client {
 		});
 
 		TopBottomPanel::bottom("footer-panel").show(ctx, |ui| {
-			ui.add_space(8.0);
+			ui.add_space(Self::DEFAULT_SPACING);
 
 			ui.vertical_centered(|ui| self.render_status(ui));
 
-			ui.add_space(8.0);
+			ui.add_space(Self::DEFAULT_SPACING);
 		});
 	}
 
