@@ -8,8 +8,8 @@ use {
 	chrono::Utc,
 	eframe::{
 		egui::{
-			style::Selection, FontData, FontDefinitions, RichText, ScrollArea, Style, TextStyle,
-			Ui, Visuals,
+			style::Selection, Button, FontData, FontDefinitions, RichText, ScrollArea, Style,
+			TextEdit, TextStyle, Ui, Visuals,
 		},
 		epaint::{FontFamily, FontId},
 		CreationContext,
@@ -19,6 +19,7 @@ use {
 	std::{collections::BTreeMap, fs::File, sync::Arc},
 	tokio::{sync::Mutex, task::JoinHandle},
 	tracing::{error, info, warn},
+	uuid::Uuid,
 };
 
 pub struct Client {
@@ -34,6 +35,7 @@ impl Client {
 	pub const APP_NAME: &str = "schnose-gsi-client";
 	pub const DEFAULT_FONT: &str = "Quicksand";
 	pub const MONOSPACE_FONT: &str = "Fira Code";
+	pub const DEFAULT_SPACING: f32 = 8.0;
 
 	#[tracing::instrument]
 	pub async fn init(config: Config, logger: Option<LogReceiver>) {
@@ -135,8 +137,99 @@ impl Client {
 		});
 	}
 
-	pub fn render_main(&self, ui: &mut Ui) {
-		ui.label("THIS IS MAIN");
+	const fn server_running(&self) -> bool {
+		self.gsi_handle.is_some() && self.axum_handle.is_some()
+	}
+
+	fn spacing(ui: &mut Ui) {
+		ui.add_space(Self::DEFAULT_SPACING);
+	}
+
+	fn spacing_half(ui: &mut Ui) {
+		ui.add_space(Self::DEFAULT_SPACING / 2.0);
+	}
+
+	pub fn render_main(&mut self, ui: &mut Ui) {
+		ui.vertical_centered(|ui| {
+			self.render_cfg_prompt(ui);
+			self.render_key_prompt(ui);
+		});
+
+		Self::spacing(ui);
+		ui.separator();
+		Self::spacing(ui);
+
+		ui.vertical_centered(|ui| self.render_run_button(ui));
+		Self::spacing(ui);
+	}
+
+	fn render_cfg_prompt(&mut self, ui: &mut Ui) {
+		let button = ui.add(Button::new("Select your /csgo/cfg folder").fill(colors::SURFACE2));
+
+		let config = &mut *tokio::task::block_in_place(|| self.config.blocking_lock());
+
+		let mut current_cfg_path = config
+			.csgo_cfg_path
+			.clone()
+			.unwrap_or_default()
+			.display()
+			.to_string();
+
+		if button.clicked() {
+			if let Some(new_cfg_path) = FileDialog::new().pick_folder() {
+				current_cfg_path = new_cfg_path.display().to_string();
+				config.csgo_cfg_path = Some(new_cfg_path);
+			}
+		}
+
+		button.on_hover_text(format!("Current folder: {current_cfg_path}"));
+	}
+
+	fn render_key_prompt(&mut self, ui: &mut Ui) {
+		ui.label("Enter your API Key: ");
+		let config = &mut *tokio::task::block_in_place(|| self.config.blocking_lock());
+		if let Some(current_api_key) = config.schnose_api_key.as_mut() {
+			let mut new_api_key = String::new();
+			TextEdit::singleline(&mut new_api_key)
+				.password(true)
+				.show(ui);
+
+			if let Ok(uuid) = Uuid::parse_str(&new_api_key) {
+				*current_api_key = uuid;
+			}
+		}
+	}
+
+	fn render_run_button(&mut self, ui: &mut Ui) {
+		if self.server_running() {
+			let stop_text = RichText::new("Stop GSI Server").color(colors::RED);
+			let stop_button = Button::new(stop_text).fill(colors::SURFACE2);
+			if ui.add(stop_button).clicked() {
+				self.stop_server()
+			}
+		} else {
+			let start_text = RichText::new("Start GSI Server").color(colors::GREEN);
+			let start_button = Button::new(start_text).fill(colors::SURFACE2);
+			if ui.add(start_button).clicked() {
+				self.run_server();
+			}
+		}
+	}
+
+	fn run_server(&mut self) {
+		self.gsi_handle = Some(crate::gsi::run(Arc::clone(&self.state), Arc::clone(&self.config)));
+
+		self.axum_handle = Some(tokio::spawn(crate::server::run(Arc::clone(&self.state))));
+	}
+
+	fn stop_server(&mut self) {
+		if let Some(handle) = self.axum_handle.take() {
+			handle.abort();
+		}
+
+		if let Some(handle) = self.gsi_handle.take() {
+			handle.abort();
+		}
 	}
 
 	pub fn render_logs(&mut self, ui: &mut Ui) {
@@ -144,9 +237,9 @@ impl Client {
 			// TODO: put this below the scroll area
 			self.save_logs(ui);
 
-			ui.add_space(8.0);
+			Self::spacing(ui);
 			ui.separator();
-			ui.add_space(8.0);
+			Self::spacing(ui);
 		}
 
 		let Some(logger) = &mut self.logger else {
@@ -169,34 +262,34 @@ impl Client {
 					.take(range.len())
 					.for_each(|log| {
 						ui.horizontal(|ui| {
-							ui.add_space(4.0);
+							Self::spacing_half(ui);
 
 							ui.label(log.timestamp);
 
-							ui.add_space(4.0);
+							Self::spacing_half(ui);
 							ui.separator();
-							ui.add_space(4.0);
+							Self::spacing_half(ui);
 
 							ui.label(log.level);
 
-							ui.add_space(4.0);
+							Self::spacing_half(ui);
 							ui.separator();
-							ui.add_space(4.0);
+							Self::spacing_half(ui);
 
 							ui.label(log.message);
-							ui.add_space(4.0);
+							Self::spacing_half(ui);
 						});
 					});
 			});
 
-		ui.add_space(8.0);
+		Self::spacing(ui);
 
 		// FIXME: this is not being displayed for some reason
 		ui.label("HI");
 	}
 
 	pub fn render_status(&self, ui: &mut Ui) {
-		let status = if self.gsi_handle.is_some() && self.axum_handle.is_some() {
+		let status = if self.server_running() {
 			RichText::new("Running").color(colors::GREEN)
 		} else {
 			RichText::new("Stopped").color(colors::RED)
@@ -206,7 +299,7 @@ impl Client {
 		ui.label(status);
 	}
 
-	pub fn save_logs(&mut self, ui: &mut Ui) {
+	fn save_logs(&mut self, ui: &mut Ui) {
 		use std::io::Write;
 
 		if !ui
