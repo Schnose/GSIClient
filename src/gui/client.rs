@@ -17,7 +17,10 @@ use {
 	eframe::{HardwareAcceleration, NativeOptions, Theme},
 	rfd::FileDialog,
 	std::{collections::BTreeMap, fs::File, sync::Arc},
-	tokio::{sync::Mutex, task::JoinHandle},
+	tokio::{
+		sync::{broadcast, Mutex},
+		task::JoinHandle,
+	},
 	tracing::{error, info, warn},
 	uuid::Uuid,
 };
@@ -26,7 +29,6 @@ pub struct Client {
 	pub config: Arc<Mutex<Config>>,
 	pub logger: Option<LogReceiver>,
 	pub current_tab: Tab,
-	pub state: Arc<Mutex<Option<crate::gsi::State>>>,
 	pub api_key_prompt: String,
 	pub gsi_handle: Option<schnose_gsi::ServerHandle>,
 	pub axum_handle: Option<JoinHandle<()>>,
@@ -49,7 +51,6 @@ impl Client {
 			config: Arc::new(Mutex::new(config)),
 			logger,
 			current_tab: Tab::Main,
-			state: Arc::new(Mutex::new(None)),
 			api_key_prompt,
 			gsi_handle: None,
 			axum_handle: None,
@@ -228,9 +229,15 @@ impl Client {
 	}
 
 	fn run_server(&mut self) {
-		self.gsi_handle = Some(crate::gsi::run(Arc::clone(&self.state), Arc::clone(&self.config)));
+		let (state_sender, state_receiver) = broadcast::channel(64);
 
-		self.axum_handle = Some(tokio::spawn(crate::server::run(Arc::clone(&self.state))));
+		self.gsi_handle = Some(crate::gsi::run(state_sender, Arc::clone(&self.config)));
+
+		self.axum_handle = Some(tokio::spawn(crate::server::run(state_receiver)));
+
+		// self.gsi_handle = Some(crate::gsi::run(Arc::clone(&self.state), Arc::clone(&self.config)));
+		//
+		// self.axum_handle = Some(tokio::spawn(crate::server::run(Arc::clone(&self.state))));
 	}
 
 	fn stop_server(&mut self) {

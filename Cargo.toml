@@ -61,7 +61,7 @@ features = ["full"]
 
 [dependencies.axum]
 version = "0.6"
-features = ["macros"]
+features = ["macros", "ws"]
 
 # GUI
 [dependencies.eframe]

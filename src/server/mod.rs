@@ -1,8 +1,10 @@
 use {
 	crate::gsi::State,
 	axum::{
-		extract::{Query, State as StateExtractor},
-		http::StatusCode,
+		extract::{
+			ws::{Message, WebSocketUpgrade},
+			Query, State as StateExtractor,
+		},
 		response::{Html, IntoResponse},
 		routing::get,
 		Json, Router, Server,
@@ -11,33 +13,34 @@ use {
 		global_api::{self, Record},
 		MapIdentifier, Mode, SteamID,
 	},
-	serde::{Deserialize, Serialize},
+	serde::Deserialize,
 	std::{net::SocketAddr, path::PathBuf, sync::Arc},
-	tokio::sync::Mutex,
+	tokio::sync::broadcast::Receiver,
+	tracing::error,
 };
 
 pub const PORT: u16 = 9999;
 
 #[derive(Debug, Clone)]
-pub struct StateWrapper {
-	state: Arc<Mutex<Option<State>>>,
-	gokz_client: gokz_rs::Client,
+pub struct StateReceiver {
+	receiver: Arc<Receiver<State>>,
+	gokz_client: Arc<gokz_rs::Client>,
 }
 
-pub async fn run(state: Arc<Mutex<Option<State>>>) {
-	let state = StateWrapper {
-		state,
-		gokz_client: gokz_rs::Client::new(),
+pub async fn run(receiver: Receiver<State>) {
+	let state_receiver = StateReceiver {
+		receiver: Arc::new(receiver),
+		gokz_client: Arc::new(gokz_rs::Client::new()),
 	};
 
 	let addr = SocketAddr::from(([127, 0, 0, 1], PORT));
 
 	let router = Router::new()
 		.route("/", get(overlay))
-		.route("/gsi", get(get_state))
-		.route("/wrs", get(get_wrs))
-		.route("/pbs", get(get_pbs))
-		.with_state(state);
+		.route("/gsi", get(websocket))
+		.route("/wrs", get(wrs))
+		.route("/pbs", get(pbs))
+		.with_state(state_receiver);
 
 	Server::bind(&addr)
 		.serve(router.into_make_service())
@@ -45,18 +48,25 @@ pub async fn run(state: Arc<Mutex<Option<State>>>) {
 		.expect("Failed to run Axum server.")
 }
 
-#[derive(Debug, Clone, Serialize)]
-struct Response {
-	json: Option<State>,
-}
+async fn websocket(
+	ws: WebSocketUpgrade,
+	StateExtractor(StateReceiver { receiver, .. }): StateExtractor<StateReceiver>,
+) -> impl IntoResponse {
+	ws.on_upgrade(|mut ws| async move {
+		while let Ok(state) = receiver.resubscribe().recv().await {
+			let json = match serde_json::to_string(&state) {
+				Ok(json) => json,
+				Err(why) => {
+					error!("Failed to serialize state: {why:?}");
+					continue;
+				}
+			};
 
-impl IntoResponse for Response {
-	fn into_response(self) -> axum::response::Response {
-		match self.json {
-			None => (StatusCode::NO_CONTENT, ()).into_response(),
-			Some(json) => (StatusCode::OK, Json(json)).into_response(),
+			if let Err(why) = ws.send(Message::Text(json)).await {
+				error!("Failed to send state: {why:?}")
+			}
 		}
-	}
+	})
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -66,17 +76,11 @@ struct GlobalAPIParams {
 	pub mode: Mode,
 }
 
-async fn get_state(
-	StateExtractor(StateWrapper { state, .. }): StateExtractor<StateWrapper>,
-) -> Response {
-	Response { json: state.lock().await.clone() }
-}
-
 type Records = (Option<Record>, Option<Record>);
 
-async fn get_wrs(
+async fn wrs(
 	Query(GlobalAPIParams { map_identifier, mode, .. }): Query<GlobalAPIParams>,
-	StateExtractor(StateWrapper { gokz_client, .. }): StateExtractor<StateWrapper>,
+	StateExtractor(StateReceiver { gokz_client, .. }): StateExtractor<StateReceiver>,
 ) -> Json<Records> {
 	let tp_wr = global_api::get_wr(map_identifier.clone(), mode, true, 0, &gokz_client)
 		.await
@@ -89,9 +93,9 @@ async fn get_wrs(
 	Json((tp_wr, pro_wr))
 }
 
-async fn get_pbs(
+async fn pbs(
 	Query(GlobalAPIParams { steam_id, map_identifier, mode }): Query<GlobalAPIParams>,
-	StateExtractor(StateWrapper { gokz_client, .. }): StateExtractor<StateWrapper>,
+	StateExtractor(StateReceiver { gokz_client, .. }): StateExtractor<StateReceiver>,
 ) -> Json<Records> {
 	let tp_pb =
 		global_api::get_pb(steam_id.into(), map_identifier.clone(), mode, true, 0, &gokz_client)
