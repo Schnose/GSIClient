@@ -47,6 +47,7 @@ async fn main() -> Result<()> {
 		});
 
 	let logger = if args.log_to_stdout {
+		subscriber.init();
 		None
 	} else {
 		let (log_sender, log_receiver) = logger::new();
