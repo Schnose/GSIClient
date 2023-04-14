@@ -1,0 +1,28 @@
+* {
+	font-family: "Quicksand", sans-serif;
+}
+
+.map-name {
+	font-size: 3.5em;
+	color: white;
+}
+
+.text {
+	color: white;
+}
+
+.wr {
+	font-size: 2.5em;
+}
+
+.tp {
+	color: #e3ad39;
+}
+
+.pro {
+	color: #5e97d8;
+}
+
+.pb {
+	color: #f38ba8;
+}
