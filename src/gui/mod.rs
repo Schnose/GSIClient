@@ -18,7 +18,7 @@ pub enum Tab {
 impl eframe::App for Client {
 	fn update(&mut self, ctx: &eframe::egui::Context, _: &mut eframe::Frame) {
 		TopBottomPanel::top("header-panel").show(ctx, |ui| {
-			ui.add_space(8.0);
+			ui.add_space(Self::DEFAULT_SPACING);
 
 			ui.horizontal(|ui| {
 				ui.selectable_value(&mut self.current_tab, Tab::Main, "Main");
