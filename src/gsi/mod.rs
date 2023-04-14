@@ -5,13 +5,14 @@ use {
 	schnose_gsi::{GSIConfigBuilder, GSIServer, Subscription},
 	serde::{Deserialize, Serialize},
 	std::{sync::Arc, time::Duration},
-	tokio::sync::Mutex,
-	tracing::{debug, error, info, trace},
+	tokio::sync::{broadcast::Sender, Mutex},
+	tracing::{debug, error, info, trace, warn},
 	uuid::Uuid,
 };
 
 pub fn run(
-	state: Arc<Mutex<Option<State>>>,
+	// state: Arc<Mutex<Option<State>>>,
+	state_sender: Sender<State>,
 	config: Arc<Mutex<Config>>,
 ) -> schnose_gsi::ServerHandle {
 	let mut config_builder = GSIConfigBuilder::new("schnose-gsi-client");
@@ -55,12 +56,18 @@ pub fn run(
 			.unwrap();
 	}
 
+	let state_sender = Arc::new(state_sender);
 	let gokz_client = Arc::new(gokz_rs::Client::new());
 	let prev_event = Arc::new(Mutex::new(None));
 
+	// Send initial payload
+	if let Err(why) = state_sender.send(State::default()) {
+		error!("Failed to send new state: {why:?}");
+	}
+
 	gsi_server.add_async_event_listener(move |event| {
 		let gokz_client = Arc::clone(&gokz_client);
-		let state = Arc::clone(&state);
+		let state_sender = Arc::clone(&state_sender);
 		let config = Arc::clone(&config);
 		let prev_event = Arc::clone(&prev_event);
 
@@ -74,6 +81,7 @@ pub fn run(
 			{
 				let mut prev_event = prev_event.lock().await;
 				if (*prev_event).as_ref() == Some(&event) {
+					warn!("SAME EVENT");
 					return;
 				}
 				*prev_event = Some(event.clone());
@@ -84,7 +92,11 @@ pub fn run(
 				Err(why) => return error!("Failed to parse event: {why:#?}"),
 			};
 
-			*state.lock().await = Some(new_state.clone());
+			info!("Sending state: {new_state:?}");
+
+			if let Err(why) = state_sender.send(new_state.clone()) {
+				return error!("Failed to send new state: {why:?}");
+			}
 
 			let schnose_api_key = config.lock().await.schnose_api_key;
 
@@ -133,7 +145,7 @@ async fn notify_twitch_bot(
 	}
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct State {
 	pub player_name: Option<String>,
 	pub steam_id: Option<SteamID>,

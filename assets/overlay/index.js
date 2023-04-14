@@ -1,9 +1,11 @@
+// HTML elements
 const mapName = document.querySelector(".map-name");
 const tpWr = document.querySelector(".tp-wr");
 const proWr = document.querySelector(".pro-wr");
 const tpPb = document.querySelector("#tp-pb");
 const proPb = document.querySelector("#pro-pb");
 
+// 100.53 => 01:40.530
 function formatTime(seconds) {
 	const hours = Math.floor(seconds / 3600);
 	const minutes = Math.floor((seconds % 3600) / 60);
@@ -18,6 +20,7 @@ function formatTime(seconds) {
 	return timeString;
 }
 
+// validate map names
 function isKZMap(mapName) {
 	if (!mapName) {
 		return false;
@@ -41,26 +44,64 @@ function isKZMap(mapName) {
 	return false;
 }
 
-setInterval(async () => {
+let gameInfo = null;
 
-	/*
-	 * pub player_name: Option<String>,
-	 * pub steam_id: Option<SteamID>,
-	 * pub map_name: Option<String>,
-	 * pub map_tier: Option<Tier>,
-	 * pub mode: Option<Mode>,
-	 */
-	const gameInfo = await fetch("http://localhost:__REPLACE_PORT__/gsi")
-		.then((res) => {
-			if (res.status != 200) {
-				return null;
-			}
-			return res.json();
-		})
-		.catch(console.error);
+// Setup WebSocket connection
+const url = new URL("/gsi", window.location.href);
+url.protocol = url.protocol.replace("http", "ws");
+
+const ws = new WebSocket(url.href);
+ws.onmessage = async (ev) => {
+	console.log({ ev });
+
+	if (!ev) {
+		return;
+	}
+
+	try {
+		gameInfo = JSON.parse(ev.data);
+	} catch (err) {
+		console.error("Failed to deserialize JSON: ", err);
+	}
 
 	console.log({ gameInfo });
 
+	if (!gameInfo) {
+		return;
+	}
+
+	mapName.innerHTML = `${gameInfo.map_name}`;
+
+	if (gameInfo?.mode) {
+		let mode;
+		switch (gameInfo.mode) {
+			case "kz_timer": {
+				mode = "KZT";
+				break;
+			}
+			case "kz_simple": {
+				mode = "SKZ";
+				break;
+			}
+			case "kz_vanilla": {
+				mode = "VNL";
+				break;
+			}
+			default: {
+				mode = "unknown mode";
+			}
+		}
+		mapName.innerHTML = `[${mode}] ${mapName.innerHTML}`;
+	}
+
+	if (gameInfo?.map_tier) {
+		mapName.innerHTML += ` (T${gameInfo.map_tier})`;
+	} else {
+		mapName.innerHTML += " (not global)";
+	}
+};
+
+setInterval(async () => {
 	if (!gameInfo) {
 		return;
 	}
@@ -84,18 +125,6 @@ setInterval(async () => {
 			.then((res) => res.json())
 			.catch(console.error)
 		: [null, null];
-
-	mapName.innerHTML = `${gameInfo.map_name}`;
-
-	if (gameInfo?.mode) {
-		mapName.innerHTML = `[${gameInfo.mode}] ${mapName.innerHTML}`;
-	}
-
-	if (gameInfo?.map_tier) {
-		mapName.innerHTML += ` (T${gameInfo.map_tier})`;
-	} else {
-		mapName.innerHTML += " (not global)";
-	}
 
 	if (tp_wr) {
 		tpWr.innerHTML = `${formatTime(tp_wr.time)} by ${tp_wr.player_name}`;
@@ -124,5 +153,4 @@ setInterval(async () => {
 		proWr.innerHTML = "no WR";
 		proPb.innerHTML = "";
 	}
-
 }, 3000);
