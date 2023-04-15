@@ -180,21 +180,20 @@ impl Client {
 
 		let config = &mut *tokio::task::block_in_place(|| self.config.blocking_lock());
 
-		let mut current_cfg_path = config
-			.csgo_cfg_path
-			.clone()
-			.unwrap_or_default()
-			.display()
-			.to_string();
-
 		if button.clicked() {
 			if let Some(new_cfg_path) = FileDialog::new().pick_folder() {
-				current_cfg_path = new_cfg_path.display().to_string();
 				config.csgo_cfg_path = Some(new_cfg_path);
 			}
 		}
 
-		button.on_hover_text(format!("Current folder: {current_cfg_path}"));
+		button.on_hover_text(format!(
+			"Current folder: {}",
+			config
+				.csgo_cfg_path
+				.as_ref()
+				.map(|path| path.display().to_string())
+				.unwrap_or_default()
+		));
 	}
 
 	fn render_key_prompt(&mut self, ui: &mut Ui) {

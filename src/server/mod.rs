@@ -53,7 +53,8 @@ async fn websocket(
 	StateExtractor(StateReceiver { receiver, .. }): StateExtractor<StateReceiver>,
 ) -> impl IntoResponse {
 	ws.on_upgrade(|mut ws| async move {
-		while let Ok(state) = receiver.resubscribe().recv().await {
+		let mut receiver = receiver.resubscribe();
+		while let Ok(state) = receiver.recv().await {
 			let json = match serde_json::to_string(&state) {
 				Ok(json) => json,
 				Err(why) => {

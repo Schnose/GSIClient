@@ -52,7 +52,7 @@ url.protocol = url.protocol.replace("http", "ws");
 
 const ws = new WebSocket(url.href);
 ws.onmessage = async (ev) => {
-	console.log("New Info: ", ev.data);
+	console.log("New Info: ", ev?.data);
 
 	if (!ev) {
 		return;
