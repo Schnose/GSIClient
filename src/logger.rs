@@ -33,17 +33,12 @@ pub struct Log {
 }
 
 impl LogReceiver {
-	pub fn current(&mut self) -> Option<Vec<u8>> {
+	pub fn current(&mut self) -> Vec<u8> {
 		if let Ok(new_logs) = self.receiver.try_recv() {
 			self.buffer.extend(new_logs);
-			self.buffer.truncate(usize::MAX / 2);
 		}
 
-		if self.buffer.is_empty() {
-			None
-		} else {
-			Some(self.buffer.clone())
-		}
+		self.buffer.clone()
 	}
 }
 
@@ -99,7 +94,8 @@ impl Log {
 				let message = json
 					.get("fields")?
 					.get("message")?
-					.as_str()?;
+					.as_str()?
+					.trim();
 
 				let message = RichText::new(message)
 					.color(colors::LAVENDER)

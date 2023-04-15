@@ -1,13 +1,12 @@
 use {
 	crate::{colors, config::Config},
-	eframe::egui::{CentralPanel, RichText},
+	eframe::egui::{CentralPanel, RichText, TopBottomPanel},
 	std::fs::File,
 	tracing::info,
 };
 
 mod client;
 pub use client::Client;
-use eframe::egui::TopBottomPanel;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {

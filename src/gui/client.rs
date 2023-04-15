@@ -8,13 +8,14 @@ use {
 	chrono::Utc,
 	eframe::{
 		egui::{
-			style::Selection, Button, FontData, FontDefinitions, RichText, ScrollArea, Style,
+			style::Selection, Align, Button, FontData, FontDefinitions, Layout, RichText, Style,
 			TextEdit, TextStyle, Ui, Visuals,
 		},
 		epaint::{FontFamily, FontId},
 		CreationContext,
 	},
 	eframe::{HardwareAcceleration, NativeOptions, Theme},
+	egui_extras::{Column, TableBuilder},
 	egui_notify::Toasts,
 	rfd::FileDialog,
 	std::{collections::BTreeMap, fs::File, sync::Arc, time::Duration},
@@ -157,10 +158,6 @@ impl Client {
 		ui.add_space(Self::DEFAULT_SPACING);
 	}
 
-	fn spacing_half(ui: &mut Ui) {
-		ui.add_space(Self::DEFAULT_SPACING / 2.0);
-	}
-
 	pub fn render_main(&mut self, ui: &mut Ui) {
 		ui.vertical_centered(|ui| {
 			self.render_cfg_prompt(ui);
@@ -296,68 +293,89 @@ impl Client {
 			return;
 		};
 
-		let Some(logs) = logger.current() else {
-			return;
-		};
-
+		let logs = logger.current();
 		let logs = Log::from_slice(&logs);
 
-		ScrollArea::new([true; 2])
-			.auto_shrink([false; 2])
-			.stick_to_bottom(true)
-			.max_height(ui.available_height() - 120.0)
-			.show_rows(ui, 8.0, logs.len(), |ui, range| {
-				logs.into_iter()
-					.skip(range.start)
-					.take(range.len())
-					.for_each(|log| {
-						ui.horizontal(|ui| {
-							Self::spacing_half(ui);
+		let button = {
+			let mut button = None;
 
-							ui.label(log.timestamp);
-
-							Self::spacing_half(ui);
-							ui.separator();
-							Self::spacing_half(ui);
-
-							ui.label(log.level);
-
-							Self::spacing_half(ui);
-							ui.separator();
-							Self::spacing_half(ui);
-
-							ui.label(log.message);
-							Self::spacing_half(ui);
-						});
-					});
+			ui.horizontal(|ui| {
+				self.save_logs(ui);
+				let jump_button = Button::new("Go to bottom").fill(colors::SURFACE0);
+				button = Some(ui.add(jump_button));
 			});
 
-		Self::spacing(ui);
-		ui.separator();
+			ui.add_space(Self::DEFAULT_SPACING);
+			ui.separator();
+			ui.add_space(Self::DEFAULT_SPACING);
 
-		self.save_logs(ui);
+			button.unwrap()
+		};
 
-		Self::spacing(ui);
+		let mut table = TableBuilder::new(ui)
+			.striped(true)
+			.resizable(false)
+			.stick_to_bottom(true)
+			.cell_layout(Layout::left_to_right(Align::TOP))
+			.column(Column::auto())
+			.column(Column::auto())
+			.column(Column::remainder())
+			.vscroll(true)
+			.min_scrolled_height(0.0);
+
+		if button.clicked() {
+			table = table.scroll_to_row(logs.len(), None);
+		}
+
+		table.body(|body| {
+			let heights = logs
+				.iter()
+				.map(|log| {
+					let lines = log.message.text().lines().count();
+					lines as f32 * Self::DEFAULT_SPACING * 4.0
+				})
+				.collect::<Vec<_>>();
+
+			body.heterogeneous_rows(heights.into_iter(), |idx, mut row| {
+				if let Some(log) = logs.get(idx).cloned() {
+					row.col(|ui| {
+						ui.label(log.timestamp);
+					});
+
+					row.col(|ui| {
+						ui.label(log.level);
+					});
+
+					row.col(|ui| {
+						ui.label(log.message);
+					});
+				}
+			});
+		});
 	}
 
 	pub fn render_status(&self, ui: &mut Ui) {
-		let status = if self.server_running() {
-			RichText::new("Running").color(colors::GREEN)
+		if self.server_running() {
+			ui.scope(|ui| {
+				ui.style_mut().wrap = Some(true);
+				ui.label(RichText::new("Running").color(colors::GREEN));
+				ui.hyperlink_to(
+					"Open Overlay",
+					format!("http://localhost:{}", crate::server::PORT),
+				);
+			});
 		} else {
-			RichText::new("Stopped").color(colors::RED)
+			ui.label(RichText::new("Stopped").color(colors::RED));
 		}
-		.heading();
-
-		ui.label(status);
 	}
 
 	fn save_logs(&mut self, ui: &mut Ui) {
 		use std::io::Write;
 
-		if !ui
-			.button(RichText::new("Save logs").color(colors::TEXT))
-			.clicked()
-		{
+		let text = RichText::new("Save logs").color(colors::TEXT);
+		let button = Button::new(text).fill(colors::SURFACE0);
+
+		if !ui.add(button).clicked() {
 			return;
 		}
 
@@ -377,10 +395,7 @@ impl Client {
 			return error!("This UI should only be rendered if a logger is present.");
 		};
 
-		let Some(logs) = logger.current() else {
-			return warn!("Cannot save empty logs.");
-		};
-
+		let logs = logger.current();
 		let log_path = log_path.display();
 
 		match file.write_all(&logs) {
