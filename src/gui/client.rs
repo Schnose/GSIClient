@@ -271,7 +271,7 @@ impl Client {
 
 		self.axum_handle = Some(tokio::spawn(crate::server::run(state_receiver)));
 		self.notifications
-			.info("Starting Axum Server...")
+			.info("Starting HTTP Server...")
 			.set_duration(Self::NOTIFICATION_DURATION);
 	}
 
@@ -279,7 +279,7 @@ impl Client {
 		if let Some(handle) = self.axum_handle.take() {
 			handle.abort();
 			self.notifications
-				.info("Stopping Axum Server...")
+				.info("Stopping HTTP Server...")
 				.set_duration(Self::NOTIFICATION_DURATION);
 		}
 

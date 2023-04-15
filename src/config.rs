@@ -56,7 +56,7 @@ impl Config {
 			let default_contents = r#"
 				csgo_cfg_path = ''
 				gsi_port = 8888
-				api_url = 'https://schnose-twitch-bot.shuttleapp.rs'
+				api_url = 'https://schnose-twitch-bot.shuttleapp.rs/streamer'
 				schnose_api_key = ''
 			"#
 			.trim_start()
