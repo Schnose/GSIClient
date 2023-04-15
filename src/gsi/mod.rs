@@ -98,14 +98,17 @@ pub fn run(
 				return error!("Failed to send new state: {why:?}");
 			}
 
-			let schnose_api_key = config.lock().await.schnose_api_key;
+			let (api_url, schnose_api_key) = {
+				let config = config.lock().await;
+				(config.api_url.clone(), config.schnose_api_key)
+			};
 
 			let Some(schnose_api_key) = schnose_api_key else {
 				return;
 			};
 
 			if let Err(why) =
-				dbg!(notify_twitch_bot(new_state, schnose_api_key, &gokz_client).await)
+				notify_twitch_bot(new_state, &api_url, schnose_api_key, &gokz_client).await
 			{
 				error!("Failed to notify Twitch Bot with new state: {why:#?}");
 			}
@@ -121,11 +124,12 @@ pub fn run(
 
 async fn notify_twitch_bot(
 	state: State,
+	api_url: &str,
 	api_key: Uuid,
 	gokz_client: &gokz_rs::Client,
 ) -> Result<()> {
 	match gokz_client
-		.post("https://twitchbot.schnose.xyz/streamer")
+		.post(api_url)
 		.json(&state)
 		.header("x-schnose-api-key", api_key.to_string())
 		.send()
