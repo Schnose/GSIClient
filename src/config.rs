@@ -14,6 +14,7 @@ pub struct Config {
 	#[serde(deserialize_with = "deser_empty_as_none")]
 	pub csgo_cfg_path: Option<PathBuf>,
 	pub gsi_port: u16,
+	pub api_url: String,
 	#[serde(serialize_with = "ser_none_as_empty")]
 	#[serde(deserialize_with = "deser_empty_as_none")]
 	pub schnose_api_key: Option<Uuid>,
@@ -55,6 +56,7 @@ impl Config {
 			let default_contents = r#"
 				csgo_cfg_path = ''
 				gsi_port = 8888
+				api_url = 'https://schnose-twitch-bot.shuttleapp.rs'
 				schnose_api_key = ''
 			"#
 			.trim_start()
