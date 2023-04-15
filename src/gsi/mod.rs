@@ -14,7 +14,7 @@ pub fn run(
 	// state: Arc<Mutex<Option<State>>>,
 	state_sender: Sender<State>,
 	config: Arc<Mutex<Config>>,
-) -> schnose_gsi::ServerHandle {
+) -> Result<schnose_gsi::ServerHandle> {
 	let mut config_builder = GSIConfigBuilder::new("schnose-gsi-client");
 
 	config_builder
@@ -43,7 +43,9 @@ pub fn run(
 	let mut gsi_server = GSIServer::new(gsi_config, port);
 
 	if detect_install_dir {
-		gsi_server.install().unwrap();
+		gsi_server
+			.install()
+			.context("Failed to locate cfg directory automatically.")?;
 	} else {
 		gsi_server
 			.install_into(tokio::task::block_in_place(|| {
@@ -53,7 +55,7 @@ pub fn run(
 					.clone()
 					.expect("Config directory may not be empty")
 			}))
-			.unwrap();
+			.context("Failed to install GSI config. Did you enter the correct directory?")?;
 	}
 
 	let state_sender = Arc::new(state_sender);
@@ -119,7 +121,7 @@ pub fn run(
 
 	gsi_server
 		.run()
-		.expect("Failed to run GSI Server.")
+		.context("Failed to run GSI Server.")
 }
 
 async fn notify_twitch_bot(

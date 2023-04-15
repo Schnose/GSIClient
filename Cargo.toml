@@ -70,6 +70,9 @@ features = [
 	"persistence"
 ]
 
+[dependencies.egui-notify]
+version = "0.6"
+
 [dependencies.rfd]
 version = "0.11"
 
