@@ -52,7 +52,7 @@ url.protocol = url.protocol.replace("http", "ws");
 
 const ws = new WebSocket(url.href);
 ws.onmessage = async (ev) => {
-	console.log({ ev });
+	console.log("New Info: ", ev.data);
 
 	if (!ev) {
 		return;
@@ -63,8 +63,6 @@ ws.onmessage = async (ev) => {
 	} catch (err) {
 		console.error("Failed to deserialize JSON: ", err);
 	}
-
-	console.log({ gameInfo });
 
 	if (!gameInfo) {
 		return;
@@ -118,6 +116,9 @@ setInterval(async () => {
 			.catch(console.error)
 		: [null, null];
 
+	console.log("TP WR: ", tp_wr);
+	console.log("PRO WR: ", tp_wr);
+
 	const [tp_pb, pro_pb] = shouldFetchRecords
 		? await fetch(
 			`http://localhost:9999/pbs?steam_id=${gameInfo.steam_id}&map_identifier=${gameInfo.map_name}&mode=${gameInfo.mode}`
@@ -125,6 +126,9 @@ setInterval(async () => {
 			.then((res) => res.json())
 			.catch(console.error)
 		: [null, null];
+
+	console.log("TP PB: ", tp_wr);
+	console.log("PRO PB: ", tp_wr);
 
 	if (tp_wr) {
 		tpWr.innerHTML = `${formatTime(tp_wr.time)} by ${tp_wr.player_name}`;

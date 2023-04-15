@@ -15,8 +15,9 @@ use {
 		CreationContext,
 	},
 	eframe::{HardwareAcceleration, NativeOptions, Theme},
+	egui_notify::Toasts,
 	rfd::FileDialog,
-	std::{collections::BTreeMap, fs::File, sync::Arc},
+	std::{collections::BTreeMap, fs::File, sync::Arc, time::Duration},
 	tokio::{
 		sync::{broadcast, Mutex},
 		task::JoinHandle,
@@ -29,6 +30,7 @@ pub struct Client {
 	pub config: Arc<Mutex<Config>>,
 	pub logger: Option<LogReceiver>,
 	pub current_tab: Tab,
+	pub notifications: Toasts,
 	pub api_key_prompt: String,
 	pub gsi_handle: Option<schnose_gsi::ServerHandle>,
 	pub axum_handle: Option<JoinHandle<()>>,
@@ -39,6 +41,7 @@ impl Client {
 	pub const DEFAULT_FONT: &str = "Quicksand";
 	pub const MONOSPACE_FONT: &str = "Fira Code";
 	pub const DEFAULT_SPACING: f32 = 8.0;
+	pub const NOTIFICATION_DURATION: Option<Duration> = Some(Duration::from_secs(3));
 
 	#[tracing::instrument]
 	pub async fn init(config: Config, logger: Option<LogReceiver>) {
@@ -51,6 +54,7 @@ impl Client {
 			config: Arc::new(Mutex::new(config)),
 			logger,
 			current_tab: Tab::Main,
+			notifications: Toasts::default(),
 			api_key_prompt,
 			gsi_handle: None,
 			axum_handle: None,
@@ -215,14 +219,33 @@ impl Client {
 	fn render_run_button(&mut self, ui: &mut Ui) {
 		if self.server_running() {
 			let stop_text = RichText::new("Stop GSI Server").color(colors::RED);
-			let stop_button = Button::new(stop_text).fill(colors::SURFACE2);
-			if ui.add(stop_button).clicked() {
+			let stop_button = ui.add(Button::new(stop_text).fill(colors::SURFACE2));
+			if stop_button.clicked() {
 				self.stop_server()
 			}
 		} else {
 			let start_text = RichText::new("Start GSI Server").color(colors::GREEN);
-			let start_button = Button::new(start_text).fill(colors::SURFACE2);
-			if ui.add(start_button).clicked() {
+			let start_button = ui.add(Button::new(start_text).fill(colors::SURFACE2));
+
+			if start_button.clicked() {
+				{
+					let config = tokio::task::block_in_place(|| self.config.blocking_lock());
+
+					let has_path = match &config.csgo_cfg_path {
+						None => false,
+						Some(path) if path.as_os_str().is_empty() => false,
+						_ => true,
+					};
+
+					if !has_path {
+						self.notifications
+							.error("You need to enter a cfg path before you can start the server.")
+							.set_duration(Self::NOTIFICATION_DURATION)
+							.set_closable(true);
+						return;
+					}
+				}
+
 				self.run_server();
 			}
 		}
@@ -231,22 +254,40 @@ impl Client {
 	fn run_server(&mut self) {
 		let (state_sender, state_receiver) = broadcast::channel(64);
 
-		self.gsi_handle = Some(crate::gsi::run(state_sender, Arc::clone(&self.config)));
+		self.gsi_handle = match crate::gsi::run(state_sender, Arc::clone(&self.config)) {
+			Ok(handle) => {
+				self.notifications
+					.info("Starting GSI Server...")
+					.set_duration(Self::NOTIFICATION_DURATION);
+				Some(handle)
+			}
+			Err(why) => {
+				self.notifications
+					.error(format!("{why}"))
+					.set_duration(Self::NOTIFICATION_DURATION);
+				return;
+			}
+		};
 
 		self.axum_handle = Some(tokio::spawn(crate::server::run(state_receiver)));
-
-		// self.gsi_handle = Some(crate::gsi::run(Arc::clone(&self.state), Arc::clone(&self.config)));
-		//
-		// self.axum_handle = Some(tokio::spawn(crate::server::run(Arc::clone(&self.state))));
+		self.notifications
+			.info("Starting Axum Server...")
+			.set_duration(Self::NOTIFICATION_DURATION);
 	}
 
 	fn stop_server(&mut self) {
 		if let Some(handle) = self.axum_handle.take() {
 			handle.abort();
+			self.notifications
+				.info("Stopping Axum Server...")
+				.set_duration(Self::NOTIFICATION_DURATION);
 		}
 
 		if let Some(handle) = self.gsi_handle.take() {
 			handle.abort();
+			self.notifications
+				.info("Stopping GSI Server...")
+				.set_duration(Self::NOTIFICATION_DURATION);
 		}
 	}
 

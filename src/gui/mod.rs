@@ -45,6 +45,8 @@ impl eframe::App for Client {
 			};
 		});
 
+		self.notifications.show(ctx);
+
 		TopBottomPanel::bottom("footer-panel").show(ctx, |ui| {
 			ui.add_space(Self::DEFAULT_SPACING);
 
