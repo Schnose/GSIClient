@@ -1,3 +1,5 @@
+#![windows_subsystem = "windows"]
+
 use {
 	crate::{config::Config, gui::Client},
 	clap::Parser,
