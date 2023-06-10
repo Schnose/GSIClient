@@ -1,6 +1,6 @@
 [package]
 name = "schnose-gsi-client"
-version = "1.0.0"
+version = "2.0.0"
 authors = ["AlphaKeks <alphakeks@dawn.sh>"]
 edition = "2021"
 description = "Desktop App for CS:GO KZ streamers"
@@ -10,77 +10,4 @@ homepage = "https://github.com/Schnose"
 repository = "https://github.com/Schnose/GSIClient"
 license-file = "./LICENSE"
 publish = false
-
-# Error handling
-[dependencies.color-eyre]
-version = "0.6"
-
-[dependencies.thiserror]
-version = "1"
-
-# Logging
-[dependencies.tracing]
-version = "0.1"
-
-[dependencies.tracing-subscriber]
-version = "0.3"
-features = ["json"]
-
-# Utilities
-[dependencies.chrono]
-version = "0.4"
-
-[dependencies.clap]
-version = "4"
-features = ["derive"]
-
-# JSON parsing
-[dependencies.serde]
-version = "1"
-features = ["derive"]
-
-[dependencies.serde_json]
-version = "1"
-
-[dependencies.toml]
-version = "0.5"
-
-[dependencies.uuid]
-version = "1.3"
-features = ["serde"]
-
-# GOKZ
-[dependencies.gokz_rs]
-version = "0.18"
-features = ["global_api", "kzgo_api", "schnose_api"]
-
-# Async
-[dependencies.tokio]
-version = "1"
-features = ["full"]
-
-[dependencies.axum]
-version = "0.6"
-features = ["macros", "ws"]
-
-# GUI
-[dependencies.eframe]
-version = "0.21"
-features = [
-	"persistence"
-]
-
-[dependencies.egui_extras]
-version = "0.21"
-
-[dependencies.egui-notify]
-version = "0.6"
-
-[dependencies.rfd]
-version = "0.11"
-
-# GSI
-[dependencies.schnose_gsi]
-version = "0.4"
-features = ["gokz"]
 
