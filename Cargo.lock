@@ -535,6 +535,8 @@ version = "2.0.0"
 dependencies = [
  "gokz_rs 0.19.2",
  "schnose_gsi",
+ "serde",
+ "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",
