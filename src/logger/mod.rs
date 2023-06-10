@@ -11,6 +11,8 @@ lazy_static! {
 	pub static ref LOG_CHANNEL: broadcast::Sender<Log> = broadcast::channel(1).0;
 }
 
+pub type LogReceiver = broadcast::Receiver<Log>;
+
 pub struct Logger {
 	pub sender: &'static broadcast::Sender<Log>,
 }

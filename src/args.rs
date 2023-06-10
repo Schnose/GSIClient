@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use clap::Parser;
 use tracing::Level;
 
@@ -17,6 +19,13 @@ pub struct Args {
 	#[arg(long = "logs")]
 	#[clap(default_value_t = Level::INFO)]
 	pub log_level: Level,
+
+	/// A custom config file.
+	///
+	/// This is mainly intended for testing purposes.
+	/// If this is not provided, the client will try to find a file by itself.
+	#[arg(long = "config")]
+	pub config_path: Option<PathBuf>,
 }
 
 pub fn get() -> Args {

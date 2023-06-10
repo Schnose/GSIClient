@@ -1,17 +1,35 @@
 mod args;
+mod config;
+mod gui;
 mod logger;
 
 use args::Args;
+use gui::GSIGui;
+use std::process::exit;
+use color_eyre::Result;
+use tracing::error;
+
+pub(crate) use config::Config;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
+	color_eyre::install()?;
+
 	let args = args::get();
 
 	// Initialize logging
 	setup_tracing(&args);
+
+	if let Err(err) = GSIGui::init(args.config_path) {
+		error!("Failed to run GUI.");
+		error!("{err:#?}");
+		exit(1);
+	}
+
+	Ok(())
 }
 
-fn setup_tracing(Args { log_level }: &Args) {
+fn setup_tracing(Args { log_level, .. }: &Args) {
 	use logger::Logger;
 	use time::macros::format_description;
 	use tracing_subscriber::fmt::time::UtcTime;
