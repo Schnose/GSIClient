@@ -11,6 +11,9 @@ repository = "https://github.com/Schnose/GSIClient"
 license-file = "./LICENSE"
 publish = false
 
+[profile.release]
+opt-level = "s"
+
 [dependencies]
 tracing = "0.1.37"
 tracing-subscriber = "0.3.17"
