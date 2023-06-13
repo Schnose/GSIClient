@@ -5,7 +5,6 @@ pub use gsi_gui::GSIGui;
 
 use crate::config::Config;
 use eframe::egui;
-use std::process::exit;
 use tracing::{error, info, trace};
 
 impl eframe::App for GSIGui {
@@ -20,11 +19,17 @@ impl eframe::App for GSIGui {
 
 		let config_path = Config::default_location();
 		let config = toml::to_string_pretty(&self.config).expect("Failed to serialize config.");
-		let mut config_file = File::create(&config_path).expect("Failed to open config file.");
+		let mut config_file = match File::create(&config_path) {
+			Ok(config_file) => config_file,
+			Err(error) => {
+				error!(?error, "Failed to open config file.");
+				return;
+			}
+		};
 
 		if let Err(err) = config_file.write_all(config.as_bytes()) {
 			error!(?err, "Failed to save config file.");
-			exit(1);
+			return;
 		}
 
 		trace!(path = ?config_path, "Saved config.");
