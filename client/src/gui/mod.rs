@@ -40,6 +40,7 @@ impl eframe::App for GSIGui {
 	fn on_exit(&mut self, _glow_ctx: Option<&eframe::glow::Context>) {
 		self.stop_server()
 			.expect("Failed to shutdown GSI server");
+
 		info!("Goodbye.");
 	}
 

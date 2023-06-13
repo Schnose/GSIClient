@@ -15,13 +15,14 @@ use eframe::{
 };
 use egui_extras::{Column, TableBuilder};
 use rfd::FileDialog;
-use schnose_gsi_client::{Config, GameInfo};
+use schnose_gsi_client::Config;
+use schnose_gsi_client_common::GameInfo;
 use std::{
 	collections::BTreeMap,
 	path::PathBuf,
 	sync::{Arc, Mutex, MutexGuard},
 };
-use tokio::sync::broadcast;
+use tokio::{sync::broadcast, task::JoinHandle};
 use tracing::{error, trace};
 use uuid::Uuid;
 
@@ -36,8 +37,9 @@ pub struct GSIGui {
 
 	pub gsi_receiver: Option<broadcast::Receiver<GameInfo>>,
 	current_info: Option<GameInfo>,
-
 	gsi_handle: Option<schnose_gsi::ServerHandle>,
+
+	axum_handle: Option<JoinHandle<()>>,
 }
 
 impl GSIGui {
@@ -69,6 +71,7 @@ impl GSIGui {
 			gsi_receiver: None,
 			current_info: None,
 			gsi_handle: None,
+			axum_handle: None,
 		};
 
 		let native_options = NativeOptions {
@@ -106,12 +109,12 @@ impl GSIGui {
 
 		font_definitions.font_data.insert(
 			String::from(Self::DEFAULT_FONT),
-			FontData::from_static(include_bytes!("../../assets/fonts/quicksand.ttf")),
+			FontData::from_static(include_bytes!("../../../assets/fonts/quicksand.ttf")),
 		);
 
 		font_definitions.font_data.insert(
 			String::from(Self::MONOSPACE_FONT),
-			FontData::from_static(include_bytes!("../../assets/fonts/firacode.ttf")),
+			FontData::from_static(include_bytes!("../../../assets/fonts/firacode.ttf")),
 		);
 
 		font_definitions
@@ -150,9 +153,11 @@ impl GSIGui {
 
 	fn start_server(&mut self) -> Result<()> {
 		let (sender, receiver) = broadcast::channel(1);
+		let receiver2 = sender.subscribe();
 
 		self.gsi_receiver = Some(receiver);
 		self.gsi_handle = Some(schnose_gsi_client::make_server(sender, Arc::clone(&self.config))?);
+		self.axum_handle = Some(tokio::spawn(crate::server::make_server(receiver2)));
 
 		Ok(())
 	}
@@ -162,7 +167,9 @@ impl GSIGui {
 			handle.abort();
 		}
 
-		self.gsi_receiver = None;
+		if let Some(handle) = self.axum_handle.take() {
+			handle.abort();
+		}
 
 		Ok(())
 	}

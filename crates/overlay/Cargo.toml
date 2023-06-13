@@ -1,0 +1,21 @@
+[package]
+name = "schnose-gsi-client-overlay"
+version = "1.0.0"
+authors = ["AlphaKeks <alphakeks@dawn.sh>"]
+edition = "2021"
+documentation = "https://github.com/Schnose/GSIClient/wiki"
+readme = "../README.md"
+homepage = "https://github.com/Schnose"
+repository = "https://github.com/Schnose/GSIClient"
+license-file = "../LICENSE"
+publish = false
+
+[dependencies]
+color-eyre = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+gokz_rs = { version = "0.20.0" }
+schnose-gsi-client-common = { path = "../common" }
+leptos = "0.3.0"
+wasm-sockets = "1.0.0"
+

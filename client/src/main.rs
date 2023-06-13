@@ -1,6 +1,7 @@
 mod args;
 mod gui;
 mod logger;
+mod server;
 
 use args::Args;
 use color_eyre::Result;
@@ -14,7 +15,6 @@ async fn main() -> Result<()> {
 
 	let args = args::get();
 
-	// Initialize logging
 	setup_tracing(&args);
 
 	if let Err(err) = GSIGui::init(args.config_path) {

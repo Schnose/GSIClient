@@ -1,27 +1,18 @@
-[package]
-name = "schnose-gsi-client"
-version = "2.0.0"
-authors = ["AlphaKeks <alphakeks@dawn.sh>"]
-edition = "2021"
-description = "Desktop App for CS:GO KZ streamers"
-documentation = "https://github.com/Schnose/GSIClient/wiki"
-readme = "./README.md"
-homepage = "https://github.com/Schnose"
-repository = "https://github.com/Schnose/GSIClient"
-license-file = "./LICENSE"
-publish = false
+[workspace]
+members = ["client", "crates/common", "crates/overlay"]
+resolver = "2"
 
 [profile.release]
 opt-level = "s"
 
-[dependencies]
+[workspace.dependencies]
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter", "time", "json"] }
 color-eyre = "0.6.2"
 
 clap = { version = "4.3.3", features = ["derive"] }
 
-tokio = { version = "1.28.2", features = ["tracing", "rt-multi-thread"] }
+tokio = { version = "1.28.2" }
 lazy_static = "1.4.0"
 
 serde = { version = "1.0.164", features = ["derive"] }
@@ -32,7 +23,7 @@ chrono = "0.4.26"
 time = { version = "0.3.22", features = ["macros"] }
 url = { version = "2.4.0", features = ["serde"] }
 
-gokz_rs = { version = "0.19.2", features = ["global_api"] }
+gokz_rs = { version = "0.20.0", features = ["global_api"] }
 schnose_gsi = { version = "0.4.0", features = ["gokz"] }
 
 eframe = { version = "0.22.0", features = ["persistence"] }

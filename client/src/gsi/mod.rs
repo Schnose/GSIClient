@@ -1,4 +1,4 @@
-use crate::{Config, GameInfo};
+use crate::{info_from_event, Config, GameInfo};
 use color_eyre::{
 	eyre::{eyre, Context},
 	Result,
@@ -11,7 +11,7 @@ use std::{
 use tokio::sync::broadcast;
 use tracing::{debug, error, info, trace};
 
-#[tracing::instrument(skip(sender), "Creating GSI Server")]
+#[tracing::instrument(skip(sender, config), "Creating GSI Server")]
 pub fn make_server(
 	sender: broadcast::Sender<GameInfo>,
 	config: Arc<Mutex<Config>>,
@@ -89,7 +89,7 @@ pub fn make_server(
 				*prev_info = Some(info.clone());
 			}
 
-			let info = match GameInfo::try_from_event(info, &gokz_client).await {
+			let info = match info_from_event(info, &gokz_client).await {
 				Ok(info) => info,
 				Err(error) => {
 					error!(?error, "Failed to parse event.");
