@@ -4,9 +4,9 @@ mod gui;
 mod logger;
 
 use args::Args;
+use color_eyre::Result;
 use gui::GSIGui;
 use std::process::exit;
-use color_eyre::Result;
 use tracing::error;
 
 pub(crate) use config::Config;
@@ -21,8 +21,7 @@ async fn main() -> Result<()> {
 	setup_tracing(&args);
 
 	if let Err(err) = GSIGui::init(args.config_path) {
-		error!("Failed to run GUI.");
-		error!("{err:#?}");
+		error!(?err, "failed to run GUI");
 		exit(1);
 	}
 
@@ -32,22 +31,33 @@ async fn main() -> Result<()> {
 fn setup_tracing(Args { log_level, .. }: &Args) {
 	use logger::Logger;
 	use time::macros::format_description;
-	use tracing_subscriber::fmt::time::UtcTime;
+	use tracing_subscriber::{
+		fmt::{format::FmtSpan, time::UtcTime},
+		layer::SubscriberExt,
+		util::SubscriberInitExt,
+		EnvFilter,
+	};
 
 	let log_level = std::env::var("RUST_LOG")
 		.unwrap_or_else(|_| format!("ERROR,schnose_gsi_client={log_level}"));
 
 	let timer_format = format_description!("[[[year]-[month]-[day] | [hour]:[minute]:[second]]");
-	let timer = UtcTime::new(timer_format);
-
 	let writer = Logger::new();
 
-	tracing_subscriber::fmt()
-		.pretty()
-		.with_env_filter(log_level)
-		.with_file(true)
-		.with_line_number(true)
-		.with_timer(timer)
-		.with_writer(writer)
+	macro_rules! subscriber {
+		() => {
+			tracing_subscriber::fmt::layer()
+				.with_file(true)
+				.with_line_number(true)
+				.with_timer(UtcTime::new(timer_format))
+				.with_span_events(FmtSpan::FULL)
+				.pretty()
+		};
+	}
+
+	tracing_subscriber::registry()
+		.with(subscriber!())
+		.with(subscriber!().json().with_writer(writer))
+		.with(EnvFilter::from(log_level))
 		.init();
 }
