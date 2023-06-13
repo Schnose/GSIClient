@@ -35,7 +35,7 @@ fn setup_tracing(Args { log_level, .. }: &Args) {
 		fmt::{format::FmtSpan, time::UtcTime},
 		layer::SubscriberExt,
 		util::SubscriberInitExt,
-		EnvFilter,
+		EnvFilter, Layer,
 	};
 
 	let log_level = std::env::var("RUST_LOG")
@@ -56,8 +56,12 @@ fn setup_tracing(Args { log_level, .. }: &Args) {
 	}
 
 	tracing_subscriber::registry()
-		.with(subscriber!())
-		.with(subscriber!().json().with_writer(writer))
-		.with(EnvFilter::from(log_level))
+		.with(subscriber!().with_filter(EnvFilter::from(log_level)))
+		.with(
+			subscriber!()
+				.json()
+				.with_writer(writer)
+				.with_filter(EnvFilter::from("schnose_gsi_client=TRACE")),
+		)
 		.init();
 }

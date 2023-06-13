@@ -5,12 +5,12 @@ use serde_json::Value as JsonValue;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Log {
-	level: Level,
-	timestamp: String,
-	fields: HashMap<String, JsonValue>,
+	pub level: Level,
+	pub timestamp: String,
+	pub fields: HashMap<String, JsonValue>,
 
 	#[serde(flatten)]
-	rest: JsonValue,
+	pub rest: JsonValue,
 }
 
 impl TryFrom<&[u8]> for Log {
@@ -23,7 +23,7 @@ impl TryFrom<&[u8]> for Log {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename = "uppercase", untagged)]
-enum Level {
+pub enum Level {
 	Trace,
 	Debug,
 	Info,

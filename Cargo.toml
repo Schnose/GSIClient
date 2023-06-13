@@ -36,6 +36,7 @@ gokz_rs = "0.19.2"
 schnose_gsi = { version = "0.4.0", features = ["gokz"] }
 
 eframe = { version = "0.22.0", features = ["persistence"] }
+egui_extras = "0.22.0"
 catppuccin-egui = "2.0"
 rfd = "0.11.4"
 

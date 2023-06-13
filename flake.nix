@@ -20,6 +20,7 @@
             openssl
             libxkbcommon
             libGL
+            gtk3
 
             # WINIT_UNIX_BACKEND=wayland
             wayland
@@ -31,6 +32,9 @@
             xorg.libX11
           ];
           LD_LIBRARY_PATH = "${lib.makeLibraryPath buildInputs}";
+          shellHook = ''
+            export XDG_DATA_DIRS=$GSETTINGS_SCHEMAS_PATH:${hicolor-icon-theme}/share:${gnome3.adwaita-icon-theme}/share
+          '';
         };
       });
 }

@@ -1,4 +1,4 @@
-mod logs;
+pub mod logs;
 
 use lazy_static::lazy_static;
 use logs::Log;
@@ -8,7 +8,7 @@ use tracing_subscriber::fmt::MakeWriter;
 lazy_static! {
 	/// Global [`broadcast::Sender`] that [`tracing-subscriber`] can send logs to.
 	/// We can later subscribe to this sender and display the logs elsewhere.
-	pub static ref LOG_CHANNEL: broadcast::Sender<Log> = broadcast::channel(64).0;
+	pub static ref LOG_CHANNEL: broadcast::Sender<Log> = broadcast::channel(1024).0;
 }
 
 pub type LogReceiver = broadcast::Receiver<Log>;

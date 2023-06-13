@@ -1,27 +1,34 @@
 use super::{colors, tab::Tab};
 use crate::{
 	config::Config,
-	logger::{LogReceiver, LOG_CHANNEL},
+	logger::{
+		logs::{self, Log},
+		LogReceiver, LOG_CHANNEL,
+	},
 };
 use color_eyre::Result;
 use eframe::{
 	egui::{
-		self, Button, CentralPanel, FontData, FontDefinitions, RichText, Style, TextEdit,
+		self, Button, CentralPanel, FontData, FontDefinitions, Layout, RichText, Style, TextEdit,
 		TextStyle, TopBottomPanel, Ui,
 	},
+	emath::Align,
 	epaint::{FontFamily, FontId},
 	HardwareAcceleration, NativeOptions, Theme,
 };
-// use rfd::FileDialog;
+use egui_extras::{Column, TableBuilder};
+use rfd::FileDialog;
 use std::{collections::BTreeMap, path::PathBuf};
 use uuid::Uuid;
 
 pub struct GSIGui {
 	pub config: Config,
 	pub logs: LogReceiver,
+	pub log_buf: Vec<Log>,
 
 	pub current_tab: Tab,
 	api_key_buffer: String,
+	pub running: bool,
 }
 
 impl GSIGui {
@@ -29,8 +36,9 @@ impl GSIGui {
 	pub const DEFAULT_FONT: &str = "Quicksand";
 	pub const MONOSPACE_FONT: &str = "Fira Code";
 	pub const _DEFAULT_SPACING: f32 = 8.0;
+	pub const MAX_LOGS: usize = 512;
 
-	#[tracing::instrument]
+	#[tracing::instrument(name = "Initializing GUI")]
 	pub fn init(config_path: Option<PathBuf>) -> Result<()> {
 		let config = match config_path {
 			None => crate::Config::load(),
@@ -45,8 +53,10 @@ impl GSIGui {
 		let gui = Self {
 			config,
 			logs: LOG_CHANNEL.subscribe(),
+			log_buf: Vec::with_capacity(Self::MAX_LOGS * 2),
 			current_tab: Tab::Main,
 			api_key_buffer,
+			running: false,
 		};
 
 		let native_options = NativeOptions {
@@ -78,7 +88,7 @@ impl GSIGui {
 		Ok(())
 	}
 
-	#[tracing::instrument(skip(ctx))]
+	#[tracing::instrument(skip(ctx), name = "Loading fonts")]
 	fn load_fonts(ctx: &egui::Context) {
 		let mut font_definitions = FontDefinitions::default();
 
@@ -145,9 +155,19 @@ impl GSIGui {
 		let button = Button::new("Select your /csgo/cfg folder").fill(colors::SURFACE2);
 		let button = ui.add(button);
 
-		// if button.clicked() {
-		// 	self.config.cfg_path = FileDialog::new().pick_folder();
-		// }
+		if button.clicked() {
+			let mut dialog = FileDialog::new();
+
+			if let Some(ref path) = self.config.cfg_path {
+				dialog = dialog.set_directory(path);
+			}
+
+			// NOTE: Don't just assign `self.config.cfg_path` directly! That would override an
+			// existing path if the user cancels the dialog.
+			if let Some(path) = dialog.pick_folder() {
+				self.config.cfg_path = Some(path);
+			}
+		}
 
 		let current_folder = self
 			.config
@@ -188,7 +208,139 @@ impl GSIGui {
 // {{{ Log Tab
 impl GSIGui {
 	fn render_logs(&mut self, ui: &mut Ui) {
-		ui.label("LOG WINDOW COMING SOONTM");
+		while let Ok(log) = self.logs.try_recv() {
+			self.log_buf.push(log);
+		}
+
+		// Truncate old logs
+		if let Some(overflow) = self
+			.log_buf
+			.len()
+			.checked_sub(Self::MAX_LOGS)
+		{
+			self.log_buf.drain(..overflow);
+		}
+
+		let mut button = None;
+
+		ui.horizontal(|ui| {
+			// TODO: button to save logs to a file
+			button = Some(ui.add(Button::new("Jump to bottom").fill(colors::SURFACE0)));
+		});
+
+		// TODO: do this without unwrapping?
+		let button = button.unwrap();
+
+		let mut table = TableBuilder::new(ui)
+			.resizable(false)
+			.stick_to_bottom(true)
+			.cell_layout(Layout::left_to_right(Align::TOP))
+			.column(Column::auto())
+			.column(Column::auto())
+			.column(Column::auto())
+			.column(Column::auto())
+			.column(Column::remainder())
+			.vscroll(true)
+			.min_scrolled_height(0.0);
+
+		if button.clicked() {
+			table = table.scroll_to_row(usize::MAX, None);
+		}
+
+		table.body(|body| {
+			let heights = self.log_buf.iter().map(|log| {
+				let lines = log
+					.fields
+					.get("message")
+					.map(|value| value.to_string())
+					.unwrap_or_default();
+
+				lines.lines().count() as f32 * 32.0
+			});
+
+			body.heterogeneous_rows(heights, |idx, mut row| {
+				let Some(log) = self.log_buf.get(idx) else {
+					return;
+				};
+
+				row.col(|ui| {
+					let text = RichText::new(format!("{:25}", log.timestamp)).color(colors::MAUVE);
+					ui.label(text);
+				});
+
+				row.col(|ui| {
+					let text = RichText::new(format!("{:5?}", log.level)).color(match log.level {
+						logs::Level::Trace => colors::TEAL,
+						logs::Level::Debug => colors::BLUE,
+						logs::Level::Info => colors::GREEN,
+						logs::Level::Warn => colors::YELLOW,
+						logs::Level::Error => colors::RED,
+					});
+
+					ui.separator();
+					ui.label(text);
+				});
+
+				row.col(|ui| {
+					let text = log
+						.fields
+						.get("message")
+						.map(|value| value.to_string());
+
+					if let Some(text) = text {
+						ui.separator();
+						ui.label(text);
+					}
+				});
+
+				row.col(|ui| {
+					let text = log
+						.rest
+						.get("target")
+						.map(|value| value.to_string())
+						.map(|text| RichText::new(text).color(colors::MAROON));
+
+					if let Some(text) = text {
+						ui.separator();
+						ui.label(text);
+					}
+				});
+
+				row.col(|ui| {
+					if log.fields.len() <= 1 {
+						return;
+					}
+
+					ui.label(
+						RichText::new("{")
+							.color(colors::SURFACE1)
+							.italics(),
+					);
+
+					for (field, value) in log
+						.fields
+						.iter()
+						.filter(|(k, _)| *k != "message")
+					{
+						let value = value
+							.as_str()
+							.map_or_else(|| value.to_string(), |value| value.to_owned());
+
+						let text = RichText::new(format!("{field} = {value}"))
+							.color(colors::SURFACE1)
+							.italics();
+
+						ui.label(text);
+					}
+
+					ui.label(
+						RichText::new("}")
+							.color(colors::SURFACE1)
+							.italics(),
+					);
+				});
+			});
+		});
 	}
 }
 // }}}
@@ -218,8 +370,14 @@ impl GSIGui {
 impl GSIGui {
 	pub fn panel_bottom(&mut self, ctx: &egui::Context) {
 		TopBottomPanel::bottom("panel-bottom").show(ctx, |ui| {
-			// TODO
-			ui.label("This is the bottom!");
+			ui.vertical_centered(|ui| self.render_status(ui));
+		});
+	}
+
+	fn render_status(&mut self, ui: &mut Ui) {
+		ui.label(match self.running {
+			true => RichText::new("Running").color(colors::GREEN),
+			false => RichText::new("Stopped").color(colors::RED),
 		});
 	}
 }
