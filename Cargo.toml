@@ -32,7 +32,7 @@ chrono = "0.4.26"
 time = { version = "0.3.22", features = ["macros"] }
 url = { version = "2.4.0", features = ["serde"] }
 
-gokz_rs = "0.19.2"
+gokz_rs = { version = "0.19.2", features = ["global_api"] }
 schnose_gsi = { version = "0.4.0", features = ["gokz"] }
 
 eframe = { version = "0.22.0", features = ["persistence"] }

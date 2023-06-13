@@ -4,8 +4,8 @@ mod tab;
 mod gsi_gui;
 pub use gsi_gui::GSIGui;
 
-use crate::config::Config;
 use eframe::egui;
+use schnose_gsi_client::Config;
 use tracing::{error, info, trace};
 
 impl eframe::App for GSIGui {
@@ -38,6 +38,8 @@ impl eframe::App for GSIGui {
 	}
 
 	fn on_exit(&mut self, _glow_ctx: Option<&eframe::glow::Context>) {
+		self.stop_server()
+			.expect("Failed to shutdown GSI server");
 		info!("Goodbye.");
 	}
 

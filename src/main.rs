@@ -1,5 +1,4 @@
 mod args;
-mod config;
 mod gui;
 mod logger;
 
@@ -8,8 +7,6 @@ use color_eyre::Result;
 use gui::GSIGui;
 use std::process::exit;
 use tracing::error;
-
-pub(crate) use config::Config;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -61,7 +58,9 @@ fn setup_tracing(Args { log_level, .. }: &Args) {
 			subscriber!()
 				.json()
 				.with_writer(writer)
-				.with_filter(EnvFilter::from("schnose_gsi_client=TRACE")),
+				.with_filter(EnvFilter::from(
+					"schnose_gsi:INFO,gokz_rs=INFO,schnose_gsi_client=TRACE",
+				)),
 		)
 		.init();
 }

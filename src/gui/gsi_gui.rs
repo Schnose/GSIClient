@@ -1,12 +1,9 @@
 use super::{colors, tab::Tab};
-use crate::{
-	config::Config,
-	logger::{
-		logs::{self, Log},
-		LogReceiver, LOG_CHANNEL,
-	},
+use crate::logger::{
+	logs::{self, Log},
+	LogReceiver, LOG_CHANNEL,
 };
-use color_eyre::Result;
+use color_eyre::{eyre::eyre, Result};
 use eframe::{
 	egui::{
 		self, Button, CentralPanel, FontData, FontDefinitions, Layout, RichText, Style, TextEdit,
@@ -18,31 +15,43 @@ use eframe::{
 };
 use egui_extras::{Column, TableBuilder};
 use rfd::FileDialog;
-use std::{collections::BTreeMap, path::PathBuf};
+use schnose_gsi_client::{Config, GameInfo};
+use std::{
+	collections::BTreeMap,
+	path::PathBuf,
+	sync::{Arc, Mutex, MutexGuard},
+};
+use tokio::sync::broadcast;
+use tracing::{error, trace};
 use uuid::Uuid;
 
 pub struct GSIGui {
-	pub config: Config,
+	pub config: Arc<Mutex<Config>>,
 	pub logs: LogReceiver,
 	pub log_buf: Vec<Log>,
 
 	pub current_tab: Tab,
 	api_key_buffer: String,
 	pub running: bool,
+
+	pub gsi_receiver: Option<broadcast::Receiver<GameInfo>>,
+	current_info: Option<GameInfo>,
+
+	gsi_handle: Option<schnose_gsi::ServerHandle>,
 }
 
 impl GSIGui {
 	pub const APP_NAME: &str = "Schnose GSI Client";
 	pub const DEFAULT_FONT: &str = "Quicksand";
 	pub const MONOSPACE_FONT: &str = "Fira Code";
-	pub const _DEFAULT_SPACING: f32 = 8.0;
+	pub const DEFAULT_SPACING: f32 = 8.0;
 	pub const MAX_LOGS: usize = 512;
 
 	#[tracing::instrument(name = "Initializing GUI")]
 	pub fn init(config_path: Option<PathBuf>) -> Result<()> {
 		let config = match config_path {
-			None => crate::Config::load(),
-			Some(config_path) => crate::Config::load_from_file(config_path),
+			None => Config::load(),
+			Some(config_path) => Config::load_from_file(config_path),
 		}?;
 
 		let api_key_buffer = config
@@ -51,12 +60,15 @@ impl GSIGui {
 			.unwrap_or_default();
 
 		let gui = Self {
-			config,
+			config: Arc::new(Mutex::new(config)),
 			logs: LOG_CHANNEL.subscribe(),
 			log_buf: Vec::with_capacity(Self::MAX_LOGS * 2),
 			current_tab: Tab::Main,
 			api_key_buffer,
 			running: false,
+			gsi_receiver: None,
+			current_info: None,
+			gsi_handle: None,
 		};
 
 		let native_options = NativeOptions {
@@ -129,6 +141,31 @@ impl GSIGui {
 	pub fn set_theme(&self, ctx: &egui::Context) {
 		catppuccin_egui::set_theme(ctx, catppuccin_egui::MOCHA);
 	}
+
+	pub fn config(&self) -> Result<MutexGuard<Config>> {
+		self.config
+			.lock()
+			.map_err(|err| eyre!("Failed to acquire mutex guard: {err:?}"))
+	}
+
+	fn start_server(&mut self) -> Result<()> {
+		let (sender, receiver) = broadcast::channel(1);
+
+		self.gsi_receiver = Some(receiver);
+		self.gsi_handle = Some(schnose_gsi_client::make_server(sender, Arc::clone(&self.config))?);
+
+		Ok(())
+	}
+
+	pub fn stop_server(&mut self) -> Result<()> {
+		if let Some(handle) = self.gsi_handle.take() {
+			handle.abort();
+		}
+
+		self.gsi_receiver = None;
+
+		Ok(())
+	}
 }
 
 // {{{ Center Panel
@@ -146,40 +183,61 @@ impl GSIGui {
 impl GSIGui {
 	fn render_main(&mut self, ui: &mut Ui) {
 		ui.vertical_centered(|ui| {
-			self.render_cfg_prompt(ui);
-			self.render_key_prompt(ui);
+			if let Err(error) = self.render_cfg_prompt(ui) {
+				error!(?error, "Failed to render cfg prompt");
+			}
+
+			ui.add_space(Self::DEFAULT_SPACING);
+
+			if let Err(error) = self.render_key_prompt(ui) {
+				error!(?error, "Failed to render API key prompt");
+			}
+
+			ui.add_space(Self::DEFAULT_SPACING);
+
+			if let Err(error) = self.render_server_button(ui) {
+				error!(?error, "Failed to render Start/Stop button");
+			}
+
+			ui.add_space(Self::DEFAULT_SPACING);
+
+			if let Err(error) = self.render_game_info(ui) {
+				error!(?error, "Failed to render cfg prompt");
+			}
 		});
 	}
 
-	fn render_cfg_prompt(&mut self, ui: &mut Ui) {
+	fn render_cfg_prompt(&mut self, ui: &mut Ui) -> Result<()> {
 		let button = Button::new("Select your /csgo/cfg folder").fill(colors::SURFACE2);
 		let button = ui.add(button);
 
 		if button.clicked() {
 			let mut dialog = FileDialog::new();
 
-			if let Some(ref path) = self.config.cfg_path {
+			if let Some(ref path) = self.config()?.cfg_path {
 				dialog = dialog.set_directory(path);
 			}
 
 			// NOTE: Don't just assign `self.config.cfg_path` directly! That would override an
 			// existing path if the user cancels the dialog.
 			if let Some(path) = dialog.pick_folder() {
-				self.config.cfg_path = Some(path);
+				self.config()?.cfg_path = Some(path);
 			}
 		}
 
 		let current_folder = self
-			.config
+			.config()?
 			.cfg_path
 			.as_ref()
 			.map(|path| path.display().to_string())
 			.unwrap_or_default();
 
 		button.on_hover_text(format!("Current folder: {current_folder}"));
+
+		Ok(())
 	}
 
-	fn render_key_prompt(&mut self, ui: &mut Ui) {
+	fn render_key_prompt(&mut self, ui: &mut Ui) -> Result<()> {
 		ui.label("Enter your API Key: ");
 
 		TextEdit::singleline(&mut self.api_key_buffer)
@@ -187,9 +245,9 @@ impl GSIGui {
 			.show(ui);
 
 		if let Ok(api_key) = Uuid::parse_str(&self.api_key_buffer) {
-			match self.config.schnose_api_key.as_mut() {
+			match self.config()?.schnose_api_key.as_mut() {
 				None => {
-					self.config.schnose_api_key = Some(api_key);
+					self.config()?.schnose_api_key = Some(api_key);
 				}
 
 				Some(old_key) => {
@@ -199,8 +257,94 @@ impl GSIGui {
 		}
 
 		if self.api_key_buffer.is_empty() {
-			self.config.schnose_api_key = None;
+			self.config()?.schnose_api_key = None;
 		}
+
+		Ok(())
+	}
+
+	fn render_server_button(&mut self, ui: &mut Ui) -> Result<()> {
+		if self.running {
+			let text = RichText::new("Stop GSI server").color(colors::RED);
+			let button = Button::new(text).fill(colors::SURFACE2);
+
+			if ui.add(button).clicked() {
+				self.stop_server()?;
+				self.running = false;
+			}
+		} else {
+			let text = RichText::new("Start GSI server").color(colors::GREEN);
+			let button = Button::new(text).fill(colors::SURFACE2);
+
+			if ui.add(button).clicked() {
+				{
+					let config = self.config()?;
+
+					let valid_path =
+						matches!(config.cfg_path, Some(ref path) if !path.as_os_str().is_empty());
+
+					if !valid_path {
+						// TODO: send notification
+					}
+				}
+
+				self.start_server()?;
+				self.running = true;
+			}
+		}
+
+		Ok(())
+	}
+
+	fn render_game_info(&mut self, ui: &mut Ui) -> Result<()> {
+		if let Some(Ok(info)) = self
+			.gsi_receiver
+			.as_mut()
+			.map(|recv| recv.try_recv())
+		{
+			trace!(?info, "new game info");
+			self.current_info = Some(info);
+		}
+
+		let Some(ref info) = self.current_info else {
+			return Ok(());
+		};
+
+		ui.vertical_centered_justified(|ui| {
+			ui.colored_label(
+				colors::SAPPHIRE,
+				format!(
+					"Player: {}{}",
+					info.player_name,
+					info.steam_id
+						.map(|steam_id| format!(" ({steam_id})"))
+						.unwrap_or_default()
+				),
+			);
+
+			ui.colored_label(
+				colors::SAPPHIRE,
+				format!(
+					"Mode: {}",
+					info.mode
+						.map(|mode| mode.to_string())
+						.unwrap_or_else(|| String::from("None")),
+				),
+			);
+
+			ui.colored_label(
+				colors::SAPPHIRE,
+				format!(
+					"Map: {}{}",
+					info.map_name,
+					info.map_tier
+						.map(|tier| format!(" (T{})", tier as u8))
+						.unwrap_or_default()
+				),
+			);
+		});
+
+		Ok(())
 	}
 }
 // }}}
