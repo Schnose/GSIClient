@@ -1,5 +1,6 @@
 mod colors;
-mod components;
+mod tab;
+
 mod gsi_gui;
 pub use gsi_gui::GSIGui;
 
@@ -9,9 +10,10 @@ use tracing::{error, info, trace};
 
 impl eframe::App for GSIGui {
 	fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-		components::panel_header(ctx);
-		components::panel_center(ctx);
-		components::panel_bottom(ctx);
+		self.set_theme(ctx);
+		self.panel_header(ctx);
+		self.panel_center(ctx);
+		self.panel_bottom(ctx);
 	}
 
 	fn save(&mut self, _storage: &mut dyn eframe::Storage) {
