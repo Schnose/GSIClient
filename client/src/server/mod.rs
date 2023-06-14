@@ -6,27 +6,19 @@ use axum::{
 	routing::get,
 	Router, Server,
 };
-use schnose_gsi_client_common::GameInfo;
+use schnose_gsi_client_common::{GameInfo, WS_PORT};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::broadcast;
 use tracing::{error, info, trace};
 
-const PORT: u16 = 8869;
-
-#[allow(dead_code)]
 struct AppState {
-	receiver: broadcast::Receiver<GameInfo>,
-	gokz_client: gokz_rs::Client,
+	sender: broadcast::Sender<GameInfo>,
 }
 
-#[tracing::instrument(skip(receiver), "Creating Axum Server")]
-pub async fn make_server(receiver: broadcast::Receiver<GameInfo>) {
-	let state = AppState {
-		receiver,
-		gokz_client: gokz_rs::Client::new(),
-	};
-
-	let addr = SocketAddr::from(([127, 0, 0, 1], PORT));
+#[tracing::instrument(skip(sender), "Creating Axum Server")]
+pub async fn make_server(sender: broadcast::Sender<GameInfo>) {
+	let addr = SocketAddr::from(([127, 0, 0, 1], WS_PORT));
+	let state = AppState { sender };
 
 	let router = Router::new()
 		.route("/", get(html))
@@ -60,7 +52,7 @@ async fn overlay(
 	trace!("WebSocket connection!");
 
 	websocket.on_upgrade(|mut websocket| async move {
-		let mut receiver = state.receiver.resubscribe();
+		let mut receiver = state.sender.subscribe();
 		while let Ok(game_info) = receiver.recv().await {
 			let json = match serde_json::to_string(&game_info) {
 				Ok(json) => json,
@@ -75,6 +67,7 @@ async fn overlay(
 				.await
 			{
 				error!(?error, "Failed to send WebSocket message.");
+				return;
 			}
 		}
 	})

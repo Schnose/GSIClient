@@ -1,6 +1,8 @@
 use gokz_rs::{Mode, SteamID, Tier};
 use serde::{Deserialize, Serialize};
 
+pub const WS_PORT: u16 = 8869;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GameInfo {
 	pub player_name: String,

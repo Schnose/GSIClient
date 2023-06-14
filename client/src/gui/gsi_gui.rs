@@ -152,12 +152,12 @@ impl GSIGui {
 	}
 
 	fn start_server(&mut self) -> Result<()> {
-		let (sender, receiver) = broadcast::channel(1);
-		let receiver2 = sender.subscribe();
+		let (sender, receiver) = broadcast::channel(16);
 
 		self.gsi_receiver = Some(receiver);
-		self.gsi_handle = Some(schnose_gsi_client::make_server(sender, Arc::clone(&self.config))?);
-		self.axum_handle = Some(tokio::spawn(crate::server::make_server(receiver2)));
+		self.gsi_handle =
+			Some(schnose_gsi_client::make_server(sender.clone(), Arc::clone(&self.config))?);
+		self.axum_handle = Some(tokio::spawn(crate::server::make_server(sender)));
 
 		Ok(())
 	}
